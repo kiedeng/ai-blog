@@ -45,7 +45,13 @@ export default function SimpleMarkdownRenderer({ content, className = '' }: Simp
 
   return (
     <div 
-      className={`prose prose-lg max-w-none dark:prose-invert ${className}`}
+      className={`prose prose-lg max-w-none dark:prose-invert font-inter ${className}`}
+      style={{
+        fontFamily: 'var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        fontSize: '16px',
+        lineHeight: '1.7',
+        letterSpacing: '-0.01em'
+      }}
       dangerouslySetInnerHTML={{ __html: processedContent }}
     />
   );

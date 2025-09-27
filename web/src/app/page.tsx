@@ -9,6 +9,43 @@ import MarkdownRenderer from '@/components/markdown/MarkdownRenderer';
 // 图片缓存
 const imageCache = new Map<string, string>();
 
+// 生成渐变背景图片的Data URL
+const generateGradientImage = (width: number, height: number, theme: string) => {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  
+  if (!ctx) return '';
+  
+  // 根据主题选择渐变颜色
+  const gradients = {
+    'nature': ['#4ade80', '#22c55e', '#16a34a'],
+    'technology': ['#3b82f6', '#1d4ed8', '#1e40af'],
+    'business': ['#8b5cf6', '#7c3aed', '#6d28d9'],
+    'design': ['#f59e0b', '#d97706', '#b45309'],
+    'city': ['#6b7280', '#4b5563', '#374151'],
+    'abstract': ['#ec4899', '#db2777', '#be185d'],
+    'ocean': ['#06b6d4', '#0891b2', '#0e7490'],
+    'mountains': ['#84cc16', '#65a30d', '#4d7c0f'],
+    'sky': ['#0ea5e9', '#0284c7', '#0369a1'],
+    'vintage': ['#a78bfa', '#8b5cf6', '#7c3aed']
+  };
+  
+  const colors = gradients[theme as keyof typeof gradients] || gradients.abstract;
+  
+  // 创建渐变
+  const gradient = ctx.createLinearGradient(0, 0, width, height);
+  gradient.addColorStop(0, colors[0]);
+  gradient.addColorStop(0.5, colors[1]);
+  gradient.addColorStop(1, colors[2]);
+  
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+  
+  return canvas.toDataURL('image/jpeg', 0.8);
+};
+
 // 智能图片主题选择函数
 const getImageTheme = (title: string, excerpt: string = '') => {
   const content = (title + ' ' + excerpt).toLowerCase();
@@ -59,22 +96,31 @@ const getRandomImage = (title: string, width: number = 400, height: number = 300
   
   // 开发环境下显示选择的主题（可选）
   if (process.env.NODE_ENV === 'development') {
-    console.log(`为文章 "${title}" 选择图片主题: ${theme}`);
+    console.log(`为文章 "${title}" 选择图片主题: ${theme}, 图片ID: ${imageId}`);
   }
   
   // 使用多个可靠的图片源
   const imageSources = [
-    // Picsum Photos - 最可靠的免费图片服务
+    // 使用一些绝对可靠的图片URL
     `https://picsum.photos/${width}/${height}?random=${imageId}`,
-    // Unsplash Source API - 根据主题选择
-    `https://source.unsplash.com/${width}x${height}/?${theme}&sig=${Math.abs(seed)}`,
-    // 备用：使用固定的高质量图片
-    `https://images.unsplash.com/photo-${1500000000000 + imageId}?ixlib=rb-4.0.3&auto=format&fit=crop&w=${width}&q=80`
+    `https://picsum.photos/seed/${imageId}/${width}/${height}`,
+    // 一些固定的高质量图片作为备用
+    `https://images.unsplash.com/photo-1506905925346-14b1e5dba1c6?ixlib=rb-4.0.3&auto=format&fit=crop&w=${width}&q=80`,
+    `https://images.unsplash.com/photo-1441974231531-c6227db76b6e?ixlib=rb-4.0.3&auto=format&fit=crop&w=${width}&q=80`,
+    `https://images.unsplash.com/photo-1506905925346-14b1e5dba1c6?ixlib=rb-4.0.3&auto=format&fit=crop&w=${width}&q=80`,
+    `https://images.unsplash.com/photo-1441974231531-c6227db76b6e?ixlib=rb-4.0.3&auto=format&fit=crop&w=${width}&q=80`,
+    // 最后使用Unsplash Source API
+    `https://source.unsplash.com/${width}x${height}/?${theme}&sig=${Math.abs(seed)}`
   ];
   
   // 根据种子选择图片源
   const sourceIndex = Math.abs(seed) % imageSources.length;
   const imageUrl = imageSources[sourceIndex];
+  
+  // 开发环境下显示选择的图片URL
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`选择的图片URL: ${imageUrl}`);
+  }
   
   // 缓存图片URL
   imageCache.set(cacheKey, imageUrl);
@@ -239,7 +285,7 @@ export default function Home() {
                 {/* 封面图片区域 */}
                 <div className="relative overflow-hidden">
                   {/* 图片加载指示器 */}
-                  <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse flex items-center justify-center z-10">
+                  <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse flex items-center justify-center z-10" id={`loader-${post.id}`}>
                     <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                   </div>
                   
@@ -251,7 +297,7 @@ export default function Home() {
                     onLoad={(e) => {
                       // 图片加载完成后隐藏加载指示器
                       const target = e.target as HTMLImageElement;
-                      const loader = target.previousElementSibling as HTMLElement;
+                      const loader = document.getElementById(`loader-${post.id}`);
                       if (loader) {
                         loader.style.display = 'none';
                       }
@@ -262,22 +308,32 @@ export default function Home() {
                       }
                     }}
                     onError={(e) => {
+                      console.log(`图片加载失败: ${post.title}`, e);
                       // 如果图片加载失败，使用备用图片
                       const target = e.target as HTMLImageElement;
-                      const loader = target.previousElementSibling as HTMLElement;
+                      const loader = document.getElementById(`loader-${post.id}`);
                       
                       if (!target.dataset.retry) {
                         target.dataset.retry = 'true';
                         const backupSrc = getRandomImage(post.title + '_backup', 400, 300, post.excerpt);
+                        console.log(`尝试备用图片: ${backupSrc}`);
                         target.src = backupSrc;
                         preloadImage(backupSrc);
+                      } else if (!target.dataset.retry2) {
+                        // 第二次重试：使用渐变图片
+                        target.dataset.retry2 = 'true';
+                        const theme = getImageTheme(post.title, post.excerpt);
+                        const gradientSrc = generateGradientImage(400, 300, theme);
+                        console.log(`尝试渐变图片: ${theme}`);
+                        target.src = gradientSrc;
                       } else {
-                        // 如果备用图片也失败，显示默认占位符
+                        // 如果所有图片都失败，显示默认占位符
+                        console.log(`所有图片都失败，显示占位符: ${post.title}`);
                         target.style.display = 'none';
                         if (loader) {
                           loader.style.display = 'none';
                         }
-                        const placeholder = target.nextElementSibling as HTMLElement;
+                        const placeholder = document.getElementById(`placeholder-${post.id}`);
                         if (placeholder) {
                           placeholder.style.display = 'flex';
                         }
@@ -286,7 +342,10 @@ export default function Home() {
                   />
                   
                   {/* 图片加载失败时的占位符 */}
-                  <div className="hidden w-full h-48 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-700 dark:to-gray-600 items-center justify-center">
+                  <div 
+                    id={`placeholder-${post.id}`}
+                    className="hidden w-full h-48 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-700 dark:to-gray-600 items-center justify-center"
+                  >
                     <div className="text-center">
                       <div className="w-16 h-16 mx-auto mb-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-2xl flex items-center justify-center">
                         <span className="text-2xl">📝</span>
