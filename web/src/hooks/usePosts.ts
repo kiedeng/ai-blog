@@ -19,6 +19,7 @@ interface Post {
   created_at: string;
   updated_at: string;
   published_at?: string;
+  cover_image?: string;
   author: {
     id: number;
     username: string;
